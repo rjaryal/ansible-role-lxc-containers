@@ -1,0 +1,25 @@
+---
+
+- name: lxc > containers > Launch
+  shell: |
+    echo "Creating container ${LXC_CONTAINER_ARG} ..."
+    lxc launch "{{ lxc_container_image }}" "${LXC_CONTAINER_ARG}" ${LXC_PROJECT_ARG} ${LXC_PROFILE_ARG}
+  environment:
+    LXC_CONTAINER_ARG: "{{ lxc_cluster ~ ':' ~ lxc_container_name }}"
+    LXC_PROFILE_ARG: "{{ '--profile ' ~ (lxc_container.profiles | first) }}"
+    LXC_PROJECT_ARG: "{{ '--project ' ~ lxc_project }}"
+  when: lxc_container_name not in lxc_containers_all
+  vars:
+    lxc_container_name: "{{ lxc_container_prefix ~ '-' ~ lxc_container.name }}"
+
+- name: lxc > containers > Assign profiles
+  shell: |
+    echo "Assigning profiles to container ${LXC_CONTAINER_ARG} ..."
+    lxc profile assign "${LXC_CONTAINER_ARG}" ${LXC_PROJECT_ARG} ${LXC_PROFILE_ARG}
+  environment:
+    LXC_CONTAINER_ARG: "{{ lxc_cluster ~ ':' ~ lxc_container_name }}"
+    LXC_PROFILE_ARG: "{{ lxc_container.profiles | join(',') }}"
+    LXC_PROJECT_ARG: "{{ '--project ' ~ lxc_project }}"
+  when: lxc_container_name in lxc_containers_all
+  vars:
+    lxc_container_name: "{{ lxc_container_prefix ~ '-' ~ lxc_container.name }}"

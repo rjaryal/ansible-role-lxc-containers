@@ -1,0 +1,15 @@
+---
+
+- name: lxc > containers > Delete
+  shell: |
+    echo "Deleting container ${LXC_CONTAINER_ARG} ..."
+    lxc delete --force "${LXC_CONTAINER_ARG}" ${LXC_PROJECT_ARG}
+  environment:
+    LXC_CONTAINER_ARG: "{{ lxc_cluster ~ ':' ~ lxc_container_name }}"
+    LXC_PROJECT_ARG: "{{ '--project ' ~ lxc_project }}"
+  vars:
+    lxc_container_name: "{{ lxc_container_prefix ~ '-' ~ lxc_container.name }}"
+  when: lxc_container_name in lxc_containers_all
+  with_items: "{{ lxc_containers | default([]) }}"
+  loop_control:
+    loop_var: lxc_container

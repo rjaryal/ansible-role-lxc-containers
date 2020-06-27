@@ -1,0 +1,13 @@
+---
+
+- name: lxc > containers > Create
+  include_tasks: launch.yml
+  with_items: "{{ lxc_containers | default([]) }}"
+  loop_control:
+    loop_var: lxc_container
+
+- name: lxc > containers > Initialize
+  include_tasks: init.yml
+  with_items: "{{ lxc_containers | default([]) }}"
+  loop_control:
+    loop_var: lxc_container

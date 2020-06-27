@@ -1,0 +1,52 @@
+---
+
+- name: lxc > containers > Pre-requisite checks
+  include_tasks: check.yml
+
+- name: lxc > containers > check > LXC containers
+  shell: |
+    lxc list ${LXC_CLUSTER_ARG} ${LXC_PROJECT_ARG} --format json \
+      | jq -r '.[] | .name'
+  environment:
+    LXC_CLUSTER_ARG: "{{ lxc_cluster ~ ':' }}"
+    LXC_PROJECT_ARG: "{{ '--project ' ~ lxc_project }}"
+  register: lxc_container_cmd
+  changed_when: false
+
+- name: lxc > containers > declare > LXC container names
+  set_fact:
+    lxc_containers_all: "{{ lxc_container_cmd.stdout_lines }}"
+
+- name: lxc > containers > debug > LXC container names
+  debug:
+    msg: "{{ lxc_containers_all }}"
+    verbosity: 4
+  when: lxc_containers_all | default([]) | length
+
+- name: lxc > containers > Delete
+  include_tasks: delete.yml
+  when: not (lxc_container_enable | default(true) | bool)
+
+- name: lxc > containers > Create
+  include_tasks: create.yml
+  when: (lxc_container_enable | default(true) | bool)
+
+- name: lxc > containers > recheck > LXC containers
+  shell: |
+    lxc list ${LXC_CLUSTER_ARG} ${LXC_PROJECT_ARG} --format json \
+      | jq -r '.[] | (select(.status == "Running") | "\"" + .name + "\":\"" + (.state.network.eth0 | .addresses[] | select(.family == "inet") | .address + "\""))'
+  environment:
+    LXC_CLUSTER_ARG: "{{ lxc_cluster ~ ':' }}"
+    LXC_PROJECT_ARG: "{{ '--project ' ~ lxc_project }}"
+  register: lxc_container_cmd
+  changed_when: false
+
+- name: lxc > containers > declare > LXC container names
+  set_fact:
+    lxc_containers_all: "{ {{ lxc_container_cmd.stdout_lines | join(', ') }} }"
+
+- name: lxc > containers > debug > LXC container names
+  debug:
+    msg: "{{ lxc_containers_all }}"
+    verbosity: 4
+  when: lxc_containers_all | default([]) | length

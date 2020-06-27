@@ -1,0 +1,19 @@
+---
+
+lxc_cluster: ~
+lxc_project: ~
+
+# - Containers -
+lxc_container_enable: true
+lxc_container_prefix: ~
+lxc_container_image: "images:centos/7"
+lxc_container_cleaned: false
+lxc_container_initialized: false
+
+#
+# lxc_containers:                                   OPTIONAL, default = []
+#   - name: <container_name>                        REQUIRED
+#     profiles: <container_profiles                 REQUIRED (NON-EMPTY LIST)
+#     inventory_group: <ansible_inventory_group>    REQUIRED (NON-EMPTY TEXT)
+#
+lxc_containers: []

@@ -1,0 +1,102 @@
+#!/bin/bash -xe
+
+#
+# Script to clean up previously installed ReachEngine system
+# from Enterprise Linux or CentOS based system.
+#
+# Basic cleanup (without Docker removal):
+#   sh /tmp/cleanup.sh
+# Complete cleanup (with Docker):
+#   sh /tmp/cleanup.sh --docker
+#
+
+RESERVS="consul consul-template elasticsearch nginx pgpool-II-96 postgresql-9.6 reachengine wferuntime wfescheduler"
+REPKGS="consul consul-template elasticsearch GraphicsMagick java-1.7.0-openjdk* java-1.8.0-openjdk* nginx* pgpool* postgresql96* rbase* rengine*"
+REDIRS="/{etc,tmp}/reachengine /usr/local/{rbase*,rengine*} /reachengine /etc/{consul,consul-template}.d /var/{lib,log}/consul /var/lib/consul-template /etc/nginx /var/log/nginx /var/lib/pgsql /var/run/postgresql /etc/pgpool-II-96 /var/{log,run}/pgpool-II-96"
+REUSERS="consul elasticsearch nginx pgpool postgres reachengine"
+MARKERFILE=~/.setup_status
+DMARKERFILE=~/.dockersetup_status
+
+function timestamp() {
+  echo $(date +"%Y-%m-%d'T'%H:%M:%S")
+}
+
+function info() {
+  echo "Hostname:       $(hostname)"
+  echo "IP Address(es): $(hostname -I)"
+}
+
+function docker() {
+  if [[ "${1:-'--no-docker'}" != "--docker" ]]; then
+    echo "Skip Docker uninstall..."
+    return 0;
+  fi;
+
+  command -v docker >/dev/null 2>&1
+  if [[ $? -eq "0" ]]; then
+    echo "Stop Docker containers..."
+    docker stop $(docker ps -u)
+
+    echo "Clean Docker resources..."
+    yes | docker system clean
+  fi;
+
+  # Stop services
+  systemctl is-active --quiet docker.service
+  if [[ $? -eq "0" ]]; then
+    systemctl stop "docker.service"
+    echo "Docker service stopped!"
+  fi;
+
+  echo "Remove Docker-CE repository..."
+  rm -rf /etc/yum.repos.d/docker-ce.repo
+
+  echo "Remove Docker-CE packages..."
+  yum erase -y docker* containerd* --nogpgcheck
+  yum clean all
+
+  echo "Remove docker user..."
+  userdel --remove --force docker 2> /dev/null
+
+  rm -rf $DMARKERFILE
+  echo "Docker cleanup completed..."
+  return 0;
+}
+
+function cleanup() {
+  # Stop services
+  for s in ${RESERVS}; do
+    systemctl list-units --full --state=running | grep -Fq "${s}.service"
+    if [[ $? -eq 0 ]]; then
+      systemctl stop "${s}.service"
+      echo "${s} service stopped!"
+    else
+      echo "${s} is not running."
+    fi;
+  done;
+
+  echo "Remove reachengine repository..."
+  rm -rf /etc/yum.repos.d/reachengine.repo
+
+  echo "Remove reachengine packages..."
+  yum erase -y ${REPKGS} --nogpgcheck
+  yum -y clean all
+
+  echo "Remove reachengine directories..."
+  rm -rf ${REDIRS}
+
+  echo "Remove reachengine users..."
+  for u in ${REUSERS}; do
+    userdel --remove --force $u 2> /dev/null
+  done;
+
+  rm -rf $MARKERFILE
+  echo "Basic cleanup completed..."
+  return 0;
+}
+
+echo "Cleanup started at $(timestamp)..."
+info
+docker $@
+cleanup
+echo "Cleanup completed at $(timestamp)..."

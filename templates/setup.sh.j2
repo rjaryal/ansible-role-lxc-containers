@@ -1,0 +1,109 @@
+#!/bin/bash -xe
+
+#
+# Script to configure the first few setups on
+# newly installed Enterprise Linux or CentOS based system.
+#
+# Basic Setup (without Docker):
+#   sh /tmp/setup.sh
+# Complete Setup (with Docker):
+#   sh /tmp/setup.sh --docker
+#
+
+BASEPKGS="less openssh-server sudo yum-utils"
+KEYPUB="{{ lxc_container_ssh_pubkey | default('') }}"
+MARKERFILE=~/.setup_status
+DMARKERFILE=~/.dockersetup_status
+
+function timestamp() {
+  echo $(date +"%Y-%m-%d'T'%H:%M:%S")
+}
+
+function info() {
+  echo "Hostname:       $(hostname)"
+  echo "IP Address(es): $(hostname -I)"
+}
+
+function firewall() {
+  systemctl is-active --quiet firewalld.service
+  if [[ $? -eq "0" ]]; then
+    systemctl stop "firewalld.service"
+    systemctl disable "firewalld.service"
+    echo "Firewall Daemon stopped and disabled..."
+  fi
+}
+
+function clean() {
+  if [[ "$*" == *--force* ]]; then
+    echo "Force argument detected, clearing marker files..."
+    rm -rf $MARKERFILE $DMARKERFILE
+  fi
+}
+
+function setup() {
+  if [[ -f "$MARKERFILE" ]]; then
+    echo "This server is already setup...!"
+    return  0;
+  fi
+
+  echo "Preparing ~user/.ssh/ directory..."
+  mkdir -p ~/.ssh && chmod 0600 ~/.ssh
+
+  echo "Ensure public kes is added to authorized list..."
+  touch ~/.ssh/authorized_keys && chmod 0400 ~/.ssh/authorized_keys
+  if [[ "xx${KEYPUB}" != "xx" ]]; then
+    grep -qxF "${KEYPUB}" ~/.ssh/authorized_keys || echo "${KEYPUB}" >> ~/.ssh/authorized_keys
+  fi
+
+  echo "Install base packages..."
+  yum -y install $BASEPKGS
+  yum -y clean all
+
+  if [[ " ${BASEPKGS[@]} " =~ " openssh-server " ]]; then
+    echo "Ensure sshd service is running..."
+    systemctl enable sshd
+    systemctl start  sshd
+  fi
+
+  touch $MARKERFILE
+  echo "Basic Setup completed at $(timestamp)!" > $MARKERFILE
+
+  # Finish
+  echo  "Basic setup completed..."
+  return 0;
+}
+
+function docker() {
+  if [[ "$*" != *--docker* ]]; then
+    echo "Skip Docker install..."
+    return 0;
+  fi
+
+  if [[ -f "$DMARKERFILE" ]]; then
+    echo "Docker is already setup...!"
+    return  0;
+  fi
+
+  echo "Installing Docker-CE repository..."
+  yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+  echo "Installing Docker packages..."
+  yum install -y docker-ce docker-ce-cli containerd.io
+
+  echo "Starting Docker service..."
+  systemctl start docker
+
+  touch $DMARKERFILE
+  echo "Docker setup completed at $(timestamp)!" > $DMARKERFILE
+
+  echo  "Docker install completed..."
+  return 0;
+}
+
+echo "Setup started at $(timestamp)..."
+info
+firewall
+clean
+setup
+docker $@
+echo "Setup completed at $(timestamp)..."

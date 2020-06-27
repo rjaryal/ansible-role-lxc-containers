@@ -1,0 +1,45 @@
+---
+
+- name: lxc > containers > Create init scripts
+  become: true
+  template:
+    src: "{{ init_script }}.j2"
+    dest: "/tmp/{{ init_script }}"
+    force: true
+  with_items:
+    - "cleanup.sh"
+    - "setup.sh"
+  loop_control:
+    loop_var: init_script
+  changed_when: false
+
+- name: lxc > container > Copy init scripts to remote host
+  shell: |
+    echo "Copying init script to ${LXC_CONTAINER_ARG} ..."
+    lxc file push /tmp/cleanup.sh /tmp/setup.sh "${LXC_CONTAINER_ARG}/tmp/" ${LXC_PROJECT_ARG}
+  environment:
+    LXC_CONTAINER_ARG: "{{ lxc_cluster ~ ':' ~ lxc_container_name }}"
+    LXC_PROJECT_ARG: "{{ '--project ' ~ lxc_project }}"
+  vars:
+    lxc_container_name: "{{ lxc_container_prefix ~ '-' ~ lxc_container.name }}"
+  changed_when: false
+
+- name: lxc > containers > Initialize
+  shell: |
+    if [[ "${LXC_CONTAINER_CLEAN_ARG}" == "--cleanup" ]]; then
+      echo "Running cleanup on container ${LXC_CONTAINER_ARG} ..."
+      lxc exec "${LXC_CONTAINER_ARG}" ${LXC_PROJECT_ARG} -- bash -c "sh /tmp/cleanup.sh"
+    fi;
+    if [[ "${LXC_CONTAINER_SETUP_ARG}" == "--setup" ]]; then
+      echo "Running initial setup on container ${LXC_CONTAINER_ARG} ..."
+      lxc exec "${LXC_CONTAINER_ARG}" ${LXC_PROJECT_ARG} -- bash -c "sh /tmp/setup.sh"
+    fi;
+  environment:
+    LXC_CONTAINER_ARG: "{{ lxc_cluster ~ ':' ~ lxc_container_name }}"
+    LXC_PROJECT_ARG: "{{ '--project ' ~ lxc_project }}"
+    LXC_CONTAINER_CLEAN_ARG: >-
+      {{ ('--cleanup') if (lxc_container_cleaned | default(false) | bool) else ('--no-cleanup') }}
+    LXC_CONTAINER_SETUP_ARG: >-
+      {{ ('--setup') if (lxc_container_initialized | default(false) | bool) else ('--no-setup') }}
+  vars:
+    lxc_container_name: "{{ lxc_container_prefix ~ '-' ~ lxc_container.name }}"
